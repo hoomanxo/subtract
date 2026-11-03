@@ -81,6 +81,16 @@ details{border-top:1px solid var(--line);padding-top:16px;margin-top:8px;color:v
 summary{cursor:pointer;color:var(--ink);font-weight:600}
 textarea{min-height:110px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
 .priv{font-size:14px;color:var(--muted);margin:0 0 22px}
+form,.panel{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:16px;margin-bottom:24px;display:none}
+.panel.open{display:block}
+#impText{font:14px/1.4 "Schibsted Grotesk",system-ui,sans-serif;min-height:130px}
+.hint{font-size:14px;color:var(--muted);margin:8px 0}
+.irow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+.irow input,.irow select{flex:1 1 110px;margin:0;min-width:0}
+.irow input[data-f=name]{flex:2 1 160px}
+.irow button{flex:0 0 auto}
+.fill{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px;font-size:14px;color:var(--muted)}
+.fill input{width:auto;margin:0}
 @media (prefers-reduced-motion:no-preference){.big{transition:opacity .2s}}
 </style>
 </head>
@@ -101,7 +111,7 @@ textarea{min-height:110px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
 
   <div class="row">
     <h2>Renewing soon</h2>
-    <button class="primary" id="addBtn" type="button">Add subscription</button>
+    <div><button id="pasteBtn" type="button">Paste a list</button> <button class="primary" id="addBtn" type="button">Add subscription</button></div>
   </div>
 
   <form id="form" novalidate>
@@ -130,17 +140,29 @@ textarea{min-height:110px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
     </div>
   </form>
 
+  <div class="panel" id="imp">
+    <label>Paste your subscriptions, one per line
+      <textarea id="impText" placeholder="Netflix 15.49 monthly&#10;Spotify $11.99/mo renews Nov 14&#10;Adobe 129.99 yearly 2027-03-05"></textarea></label>
+    <p class="hint">Include each price. Renewal dates are optional here; you can fill them in on the next step.</p>
+    <div class="actions"><button class="primary" type="button" id="impPreview">Preview</button><button type="button" id="impClose">Close</button></div>
+    <div id="impPrev"></div>
+    <p class="err" id="impMsg" role="alert"></p>
+  </div>
+
   <ul class="list" id="list"></ul>
 
   <div id="doneWrap"></div>
 
-  <p class="priv">Everything you enter stays in this browser. Nothing is sent anywhere, and there is nothing to link.</p>
+  <p class="priv">Everything you enter stays in this browser. Nothing is sent anywhere, and there is nothing to link. Clearing your browser data erases your list, so download a backup file now and then.</p>
 
   <details>
     <summary>Back up or restore your list</summary>
-    <p>Copy this text somewhere safe. To restore, paste it back and choose Restore.</p>
+    <p>Download a backup file to keep your list safe or move it to another device. You can also copy the text instead.</p>
     <textarea id="backup" aria-label="Backup data"></textarea>
     <div class="actions">
+      <button class="primary" type="button" id="dlBtn">Download backup file</button>
+      <button type="button" id="fileBtn">Restore from file</button>
+      <input type="file" id="fileIn" accept=".json,application/json" hidden>
       <button type="button" id="copyBtn">Copy backup</button>
       <button type="button" id="restoreBtn">Restore from text</button>
     </div>
@@ -324,16 +346,113 @@ textarea{min-height:110px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
     var ok=false;try{ok=document.execCommand('copy')}catch(e){}
     $('backupMsg').textContent=ok?'Copied.':'Select the text above and copy it manually.';
   };
-  $('restoreBtn').onclick=function(){
+  function restoreFrom(text){
+    var data;
+    try{data=JSON.parse(text)}catch(e){data=null}
+    if(!Array.isArray(data)){$('backupMsg').textContent='That is not a valid backup. Use a file or text you copied from Subtract.';return}
+    var clean=data.filter(function(s){return s&&s.name&&typeof s.price==='number'&&PER_MONTH[s.cycle]&&/^\d{4}-\d{2}-\d{2}$/.test(s.anchor||'')}).map(function(s){
+      return {id:String(s.id||('r'+Math.random().toString(36).slice(2,8))),name:String(s.name).slice(0,120),price:s.price,cycle:s.cycle,anchor:s.anchor,
+        cat:CATS.indexOf(s.cat)>-1?s.cat:'Other',url:safeUrl(s.url||''),cancelled:!!s.cancelled}});
+    if(data.length&&!clean.length){$('backupMsg').textContent='No usable subscriptions were found in that backup.';return}
+    if(subs.length&&!confirm('Replace your current '+subs.length+' subscriptions with the '+clean.length+' in this backup?'))return;
+    subs=clean;save();render();$('backupMsg').textContent='Restored '+subs.length+' subscriptions.';
+  }
+  $('restoreBtn').onclick=function(){restoreFrom($('backup').value)};
+  $('dlBtn').onclick=function(){
     try{
-      var data=JSON.parse($('backup').value);
-      if(!Array.isArray(data))throw new Error('x');
-      subs=data.filter(function(s){return s&&s.name&&typeof s.price==='number'&&PER_MONTH[s.cycle]&&/^\d{4}-\d{2}-\d{2}$/.test(s.anchor||'')}).map(function(s){
-        return {id:String(s.id||('r'+Math.random().toString(36).slice(2,8))),name:String(s.name),price:s.price,cycle:s.cycle,anchor:s.anchor,
-          cat:CATS.indexOf(s.cat)>-1?s.cat:'Other',url:safeUrl(s.url||''),cancelled:!!s.cancelled}});
-      save();render();$('backupMsg').textContent='Restored '+subs.length+' subscriptions.';
-    }catch(e){$('backupMsg').textContent='That text is not a valid backup. Paste the full text you copied earlier.'}
+      var blob=new Blob([JSON.stringify(subs,null,2)],{type:'application/json'});
+      var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+      a.download='subtract-backup-'+iso(today())+'.json';
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+      $('backupMsg').textContent='Backup downloaded. Keep the file somewhere safe.';
+    }catch(e){$('backupMsg').textContent='Download did not work in this browser. Use Copy backup instead.'}
   };
+  $('fileBtn').onclick=function(){$('fileIn').click()};
+  $('fileIn').onchange=function(){
+    var f=this.files&&this.files[0],input=this;if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){restoreFrom(String(r.result))};
+    r.onerror=function(){$('backupMsg').textContent='Could not read that file.'};
+    r.readAsText(f);input.value='';
+  };
+
+  /* ---- paste-a-list import ---- */
+  var MONTHS=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  var HINTS=[[/netflix|hulu|disney|prime|youtube|crave|paramount|apple tv/i,'Entertainment'],[/spotify|apple music|tidal|audible|deezer/i,'Music'],
+    [/gym|fitness|peloton|headspace|calm/i,'Health'],[/hello ?fresh|meal|uber ?eats|doordash|instacart/i,'Food'],
+    [/adobe|dropbox|icloud|google one|notion|github|chatgpt|openai|microsoft|office|zoom|storage|cloud|vpn|insurance/i,'Money and work']];
+  var pending=[];
+  function guessCat(n){for(var i=0;i<HINTS.length;i++)if(HINTS[i][0].test(n))return HINTS[i][1];return 'Other'}
+  function parseDate(s){
+    var m=s.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m)return {d:m[0],rest:s.replace(m[0],' ')};
+    m=s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i);
+    if(!m)return {d:'',rest:s};
+    var mo=MONTHS.indexOf(m[1].toLowerCase()),day=+m[2],t=today(),y=m[3]?+m[3]:t.getFullYear();
+    var dt=new Date(y,mo,day);
+    if(dt.getMonth()!==mo)return {d:'',rest:s.replace(m[0],' ')};
+    if(!m[3]&&dt<t)dt=new Date(y+1,mo,day);
+    return {d:iso(dt),rest:s.replace(m[0],' ')};
+  }
+  function parseLine(line){
+    var s=line.replace(/^\s*(?:[-*\u2022]|\d+[.)])\s+/,'').trim();
+    if(!s)return null;
+    var pd=parseDate(s);s=pd.rest;
+    var cycle='monthly';
+    if(/year|yr|annual/i.test(s))cycle='yearly';else if(/week|wk/i.test(s))cycle='weekly';else if(/quarter|3\s?mo/i.test(s))cycle='quarterly';
+    var nums=[],re=/(\$)?\s?(\d+(?:[.,]\d{1,2})?)/g,m;
+    while((m=re.exec(s)))nums.push({dollar:!!m[1],val:parseFloat(m[2].replace(',','.')),idx:m.index,txt:m[0]});
+    var pick=nums.filter(function(n){return n.dollar})[0]||nums.filter(function(n){return /[.,]\d/.test(n.txt)})[0]||nums[0];
+    if(!pick||!(pick.val>0))return {err:line.trim()};
+    var name=s.slice(0,pick.idx).replace(/[\s\-\u2013\u2014:,@|\/]+$/,'').replace(/^[\s\-\u2013\u2014:,]+/,'').trim();
+    if(!name)name=s.slice(pick.idx+pick.txt.length).replace(/\b(per|a|every|each|monthly|yearly|annual(ly)?|weekly|quarterly|month|year|week|mo|yr|wk|renews?|on)\b/gi,' ').replace(/[^\w+&' .]/g,' ').replace(/\s+/g,' ').trim();
+    if(!name)return {err:line.trim()};
+    name=name.slice(0,120);
+    var url='';for(var k in PRESETS){if(k.toLowerCase()===name.toLowerCase()){name=k;url=PRESETS[k]}}
+    return {row:{name:name,price:pick.val,cycle:cycle,date:pd.d,cat:guessCat(name),url:url}};
+  }
+  function closeImp(){$('imp').classList.remove('open');$('impPrev').innerHTML='';$('impMsg').textContent='';pending=[]}
+  function renderPrev(){
+    if(!pending.length){$('impPrev').innerHTML='';return}
+    var html='<div class="fill">Fill blank dates with <input type="date" id="impFill"><button type="button" id="impFillBtn">Apply</button></div>';
+    pending.forEach(function(r,i){
+      html+='<div class="irow" data-i="'+i+'"><input data-f="name" value="'+esc(r.name)+'" aria-label="Name">'
+        +'<input data-f="price" type="number" step="0.01" min="0" value="'+esc(r.price)+'" aria-label="Price">'
+        +'<select data-f="cycle" aria-label="Billing cycle">'+['monthly','yearly','quarterly','weekly'].map(function(c){return '<option value="'+c+'"'+(c===r.cycle?' selected':'')+'>'+c+'</option>'}).join('')+'</select>'
+        +'<input data-f="date" type="date" value="'+esc(r.date)+'" aria-label="Next renewal">'
+        +'<button type="button" class="link danger" data-rm="'+i+'" aria-label="Remove row">Remove</button></div>';
+    });
+    html+='<div class="actions"><button class="primary" type="button" id="impAdd">Add '+pending.length+' subscription'+(pending.length===1?'':'s')+'</button></div>';
+    $('impPrev').innerHTML=html;
+  }
+  $('pasteBtn').onclick=function(){$('imp').classList.add('open');$('impText').focus()};
+  $('impClose').onclick=closeImp;
+  $('impPreview').onclick=function(){
+    var lines=$('impText').value.split(/\r?\n/).slice(0,200),bad=[];pending=[];
+    lines.forEach(function(l){var r=parseLine(l);if(!r)return;if(r.err)bad.push(r.err);else pending.push(r.row)});
+    $('impMsg').textContent=bad.length?('Could not read '+bad.length+' line'+(bad.length===1?'':'s')+' (each needs a name and a price): '+bad.slice(0,3).join(' | ')):(pending.length?'':'Nothing to import yet. Type a name and a price on each line.');
+    renderPrev();
+  };
+  $('impPrev').addEventListener('input',function(e){
+    var row=e.target.closest('.irow');if(!row)return;
+    var f=e.target.getAttribute('data-f'),i=+row.getAttribute('data-i');
+    pending[i][f]=(f==='price')?parseFloat(e.target.value):e.target.value;
+  });
+  $('impPrev').addEventListener('click',function(e){
+    var rm=e.target.getAttribute&&e.target.getAttribute('data-rm');
+    if(rm!==null&&rm!==undefined){pending.splice(+rm,1);renderPrev();return}
+    if(e.target.id==='impFillBtn'){
+      var d=$('impFill').value;if(!d)return;
+      pending.forEach(function(r){if(!r.date)r.date=d});renderPrev();return;
+    }
+    if(e.target.id==='impAdd'){
+      var bad=pending.filter(function(r){return !String(r.name).trim()||!(r.price>=0)||!/^\d{4}-\d{2}-\d{2}$/.test(r.date)});
+      if(bad.length){$('impMsg').textContent=bad.length+' row'+(bad.length===1?' needs':'s need')+' a name, a price and a renewal date. Fill them in or remove the row.';return}
+      pending.forEach(function(r,i){subs.push({id:'p'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,5),name:String(r.name).trim().slice(0,120),price:r.price,cycle:r.cycle,anchor:r.date,cat:r.cat,url:r.url,cancelled:false})});
+      var n=pending.length;save();render();closeImp();$('impMsg').textContent='Added '+n+' subscription'+(n===1?'':'s')+'.';
+    }
+  });
 
   $('f-cat').innerHTML=CATS.map(function(c){return '<option>'+esc(c)+'</option>'}).join('');
   $('presets').innerHTML=Object.keys(PRESETS).map(function(k){return '<option value="'+esc(k)+'">'}).join('');
