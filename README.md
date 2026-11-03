@@ -2,7 +2,7 @@
 
 Track your subscriptions without linking your bank. No account, and your data stays in your browser.
 
-**Live site:** https://YOUR-USERNAME.github.io/subtract/
+**Live site:** https://hoomanxo.github.io/subtract/
 
 ## Features
 - Monthly and yearly totals, category breakdown
