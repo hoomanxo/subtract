@@ -313,7 +313,7 @@ textarea{min-height:110px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
   function sample(){
     var t=today(),off=function(n){return iso(new Date(t.getFullYear(),t.getMonth(),t.getDate()+n))};
     var rows=[['Netflix',15.49,'monthly',3,'Entertainment'],['Spotify',11.99,'monthly',11,'Music'],
-      ['Gym',39.99,'monthly',6,'Health'],['Meal kit',69.00,'weekly',2,'Food'],
+      ['Gym',39.99,'monthly',6,'Health'],['Meal kit',49.99,'monthly',14,'Food'],
       ['Cloud storage',129.99,'yearly',40,'Money and work'],['Old news app',9.99,'monthly',19,'Other']];
     rows.forEach(function(r,i){subs.push({id:'x'+Date.now().toString(36)+i,name:r[0],price:r[1],cycle:r[2],anchor:off(r[3]),cat:r[4],url:PRESETS[r[0]]||'',cancelled:false})});
     save();render();
