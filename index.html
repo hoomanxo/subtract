@@ -131,5 +131,10 @@ footer{padding:28px 0 48px;color:var(--muted);font-size:14px;border-top:1px soli
   <footer>Built by Hooman in Toronto. Questions or feedback? Open an issue on GitHub. Visits are counted with GoatCounter, which sets no cookies and does not see what you add to the tracker.</footer>
 </div>
 <script data-goatcounter="https://subtract.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
 </body>
 </html>
