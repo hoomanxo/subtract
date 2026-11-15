@@ -468,5 +468,10 @@ form,.panel{border:1px solid var(--line);background:var(--surface);border-radius
 })();
 </script>
 <script data-goatcounter="https://subtract.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
 </body>
 </html>
